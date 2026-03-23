@@ -1,0 +1,310 @@
+using System.Data;
+using MySql.Data.MySqlClient;
+using System.Configuration;
+
+namespace Gestor_de_Horarios_de_Maestros
+{
+    public partial class Principal : Form
+    {
+        string connectionString => ConfigurationManager.ConnectionStrings["MiConexion"].ConnectionString;
+
+        private void CargarComboMaestros()
+        {
+            DataTable dt = new DataTable();
+            dt.Columns.Add("IdMaestro", typeof(int));
+            dt.Columns.Add("Nombre", typeof(string));
+
+            try
+            {
+                using (MySqlConnection con = new MySqlConnection(connectionString))
+                {
+                    string query = "SELECT IdMaestro, Nombre FROM Maestros";
+                    MySqlDataAdapter da = new MySqlDataAdapter(query, con);
+                    da.Fill(dt); // Si falla, salta al catch
+                }
+            }
+            catch
+            {
+                // Si falla la conexión, dejamos el DT vacío para llenarlo solo con "Todos"
+            }
+
+            // Agregar la opción "Todos" siempre, falle o no la BD
+            DataRow filaTodos = dt.NewRow();
+            filaTodos["IdMaestro"] = 0;
+            filaTodos["Nombre"] = "Todos";
+            dt.Rows.InsertAt(filaTodos, 0);
+
+            comboBox1.DataSource = dt;
+            comboBox1.DisplayMember = "Nombre";
+            comboBox1.ValueMember = "IdMaestro";
+        }
+
+        private void CargarGrid(string nombreMaestro = "", string seccion = "", string dia = "", string credito = "", string hora = "")
+        {
+            try
+            {
+                using (MySqlConnection con = new MySqlConnection(connectionString))
+                {
+                    // WHERE 1=1 permite que si no hay filtros, se muestren TODOS los registros
+                    string query = @"SELECT 
+                                MaestroNombre AS 'Docente', 
+                                IdMateria AS 'ID',
+                                Nombre AS 'Materia', 
+                                DiasImparte AS 'Días', 
+                                Hora AS 'Hora', 
+                                HD_Credito AS 'H/D Credito',
+                                DiasMes AS 'Días Mes',
+                                TotalCredito AS 'Total Credito',
+                                Inscritos AS 'Alum. Inscritos',
+                                Aula AS 'Aula', 
+                                Seccion AS 'Sección', 
+                                Credito AS 'Créditos'
+                             FROM HorariosView
+                             WHERE 1=1";
+
+                    MySqlCommand cmd = new MySqlCommand();
+                    cmd.Connection = con;
+
+                    // Si es "Todos" o está vacío, NO agregamos el filtro de Maestro (mostrará todo)
+                    if (!string.IsNullOrEmpty(nombreMaestro) && nombreMaestro != "Todos" && !nombreMaestro.Contains("System.Data.DataRowView"))
+                    {
+                        query += " AND MaestroNombre LIKE @nombre";
+                        cmd.Parameters.AddWithValue("@nombre", "%" + nombreMaestro + "%");
+                    }
+
+                    if (!string.IsNullOrEmpty(seccion))
+                    {
+                        query += " AND Seccion LIKE @seccion";
+                        cmd.Parameters.AddWithValue("@seccion", "%" + seccion + "%");
+                    }
+
+                    if (!string.IsNullOrEmpty(dia))
+                    {
+                        query += " AND DiasImparte LIKE @dia";
+                        cmd.Parameters.AddWithValue("@dia", "%" + dia + "%");
+                    }
+
+                    if (!string.IsNullOrEmpty(credito))
+                    {
+                        query += " AND Credito = @credito";
+                        cmd.Parameters.AddWithValue("@credito", credito);
+                    }
+
+                    if (!string.IsNullOrEmpty(hora))
+                    {
+                        query += " AND Hora LIKE @hora";
+                        cmd.Parameters.AddWithValue("@hora", "%" + hora + "%");
+                    }
+
+                    query += " ORDER BY MaestroNombre ASC";
+                    cmd.CommandText = query;
+
+                    MySqlDataAdapter da = new MySqlDataAdapter(cmd);
+                    DataTable dt = new DataTable();
+                    da.Fill(dt);
+                    dataGridView1.DataSource = dt;
+                }
+            }
+            catch (MySqlException ex)
+            {
+                MessageBox.Show("Error de conexión: " + ex.Message);
+            }
+        }
+
+        public Principal()
+        {
+            InitializeComponent();
+            this.dataGridView1.CellFormatting += new System.Windows.Forms.DataGridViewCellFormattingEventHandler(this.dataGridView1_CellFormatting);
+        }
+
+        private void Principal_Load(object sender, EventArgs e)
+        {
+            try
+            {
+                CargarComboMaestros();
+                CargarGrid();
+            }
+            catch (MySqlException)
+            {
+                MessageBox.Show("No se pudo conectar a la base de datos. " +
+                    "Por favor, configure la conexión en el menú superior.",
+                    "Aviso", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+        }
+
+        private void modificarToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+
+            using (FormModificar ventana = new FormModificar())
+            {
+                ventana.ShowDialog();
+            }
+
+            CargarComboMaestros();
+            CargarGrid();
+        }
+
+
+
+        private void agregarToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            using (FormAgregar ventana = new FormAgregar())
+            {
+                ventana.ShowDialog();
+            }
+            CargarComboMaestros();
+            CargarGrid();
+        }
+
+        private void asignarToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            // Abrimos el formulario que acabamos de crear
+            using (FormAsignar ventana = new FormAsignar())
+            {
+                // Si el usuario presiona el botón "Asignar Materia" y todo sale bien (DialogResult.OK)
+                if (ventana.ShowDialog() == DialogResult.OK)
+                {
+                    // Refrescamos los datos para ver la nueva asignación en el Grid
+                    CargarComboMaestros();
+                    CargarGrid();
+
+                    MessageBox.Show("La materia ha sido asignada al maestro correctamente.",
+                                    "Éxito", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+            }
+        }
+
+        private void buscarToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            using (FormBuscar fBusqueda = new FormBuscar())
+            {
+                if (fBusqueda.ShowDialog() == DialogResult.OK)
+                {
+                    // Enviamos los datos capturados de la ventanita al CargarGrid
+                    CargarGrid(
+                        comboBox1.Text,
+                        fBusqueda.Seccion,
+                        fBusqueda.Dia,
+                        fBusqueda.Credito,
+                        fBusqueda.Hora
+                    );
+                }
+            }
+        }
+
+        private void removerToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            //Verificar si hay una fila actual seleccionada en el DataGridView
+            if (dataGridView1.CurrentRow != null)
+            {
+                //Extraer el ID de la materia y su nombre usando los nombres de columna del View ('ID' y 'Materia')
+                int idMateria = Convert.ToInt32(dataGridView1.CurrentRow.Cells["ID"].Value);
+                string nombreMateria = dataGridView1.CurrentRow.Cells["Materia"].Value.ToString();
+
+                //Confirmar con el usuario si realmente desea eliminar el registro
+                DialogResult respuesta = MessageBox.Show(
+                    $"¿Está seguro de que desea remover la materia '{nombreMateria}' con ID {idMateria}?",
+                    "Confirmar Eliminación",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Warning);
+
+                if (respuesta == DialogResult.Yes)
+                {
+                    try
+                    {
+                        //Conectar a la base de datos y ejecutar la consulta DELETE
+                        using (MySqlConnection con = new MySqlConnection(connectionString))
+                        {
+                            con.Open();
+                            string query = "DELETE FROM Materias WHERE IdMateria = @id";
+                            using (MySqlCommand cmd = new MySqlCommand(query, con))
+                            {
+                                cmd.Parameters.AddWithValue("@id", idMateria);
+                                cmd.ExecuteNonQuery(); // Ejecuta la eliminación
+                            }
+                        }
+
+                        //Notificar éxito y refrescar la tabla
+                        MessageBox.Show("Materia eliminada correctamente.", "Éxito", MessageBoxButtons.OK, MessageBoxIcon.Information);
+
+                        CargarComboMaestros(); // Refresca combo por si era la última materia
+                        CargarGrid(); // Refresca DataGridView
+                    }
+                    catch (MySqlException ex)
+                    {
+                        MessageBox.Show("Error al eliminar la materia en la base de datos: " + ex.Message, "Error MySQL", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show("Ocurrió un error inesperado: " + ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    }
+                }
+            }
+            else
+            {
+                // Si no hay fila seleccionada, avisar al usuario
+                MessageBox.Show("Por favor, seleccione una materia en la tabla para remover.", "Aviso", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
+            }
+        }
+
+        private void comboBox1_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            // Solo actuamos si el usuario cambió la selección (tiene el foco)
+            if (comboBox1.Focused && comboBox1.SelectedIndex != -1)
+            {
+                // Al seleccionar un maestro (o "Todos"), cargamos el grid 
+                // enviando solo el nombre y dejando los demás filtros vacíos.
+                CargarGrid(comboBox1.Text, "", "", "", "");
+            }
+        }
+
+        private void label1_Click(object sender, EventArgs e)
+        {
+
+        }
+
+        private void conexiónToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            using (ConfigConexion ventana = new ConfigConexion())
+            {
+                ventana.ShowDialog();
+            }
+
+            // Al cerrar la ventana, intentamos cargar los datos con la nueva conexión
+            CargarComboMaestros();
+            CargarGrid();
+        }
+
+        private void actualizarToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            CargarComboMaestros();
+            CargarGrid();
+            MessageBox.Show("Datos actualizados correctamente.", "Nítido", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
+        private void dataGridView1_CellFormatting(object sender, DataGridViewCellFormattingEventArgs e)
+        {
+            // Buscamos la columna "Hora"
+            if (dataGridView1.Columns[e.ColumnIndex].Name == "Hora" && e.Value != null)
+            {
+                string valor = e.Value.ToString();
+
+                // Si el usuario escribió "08:00-10:00", lo ponemos bonito: "08:00 - 10:00"
+                if (valor.Contains("-"))
+                {
+                    string[] partes = valor.Split('-');
+                    e.Value = $"{partes[0].Trim()} - {partes[1].Trim()}";
+                    e.FormattingApplied = true;
+                }
+            }
+        }
+
+        private void reporteToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            using (FormImprimir ventana = new FormImprimir())
+            {
+                ventana.ShowDialog();
+            }
+        }
+    }
+}

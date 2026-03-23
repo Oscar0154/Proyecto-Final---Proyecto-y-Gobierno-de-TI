@@ -1,0 +1,29 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="Current" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <_LastSelectedProfileId>D:\Folder\Programar\C#\Proyecto-Final---Proyecto-y-Gobierno-de-TI\Gestor de Horarios de Maestros\Properties\PublishProfiles\FolderProfile.pubxml</_LastSelectedProfileId>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Update="ConfigConexion.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Update="FormImprimir.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Update="FormAgregar.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Update="FormAsignar.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Update="FormBuscar.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Update="FormModificar.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Update="Principal.cs">
+      <SubType>Form</SubType>
+    </Compile>
+  </ItemGroup>
+</Project>
